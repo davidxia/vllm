@@ -1,9 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import traceback
 from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+
+# Print a clean stack trace
+stack = traceback.extract_stack()
+# Each frame is a tuple of (filename, line number, function name, text)
+clean_frames = [
+    frame for frame in stack
+    if 'importlib' not in frame[0] and 'frozen' not in frame[0]
+]
+for frame in clean_frames:
+    print(f"{frame[0]}:{frame[1]} in {frame[2]}")
 import prometheus_client
 
 from vllm.config import SpeculativeConfig
