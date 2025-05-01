@@ -7,9 +7,15 @@ from vllm.config import CacheConfig, ModelConfig, SchedulerConfig, VllmConfig
 from vllm.sampling_params import SamplingParams
 from vllm.v1.core.sched.output import (CachedRequestData, NewRequestData,
                                        SchedulerOutput)
-from vllm.v1.worker.tpu_model_runner import (
-    TPUModelRunner, _get_padded_num_reqs_with_upper_limit,
-    _get_padded_token_len, _get_req_paddings, _get_token_paddings)
+try:
+    from vllm.v1.worker.tpu_model_runner import (
+        TPUModelRunner, _get_padded_num_reqs_with_upper_limit,
+        _get_padded_token_len, _get_req_paddings, _get_token_paddings)
+except ImportError as e:
+    import platform
+    if platform.system() == "Darwin":
+        pytest.skip("vllm.v1.worker.tpu_model_runner cannot be imported on macOS", allow_module_level=True)
+    raise e
 
 # Mock torch_xla module since it may not be available in the test environments
 torch_xla_patcher = mock.patch.dict(

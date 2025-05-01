@@ -1494,6 +1494,7 @@ class AsyncEngineArgs(EngineArgs):
 
 def _raise_or_fallback(feature_name: str, recommend_to_remove: bool):
     if envs.is_set("VLLM_USE_V1") and envs.VLLM_USE_V1:
+        print(f"VLLM_USE_V1={envs.VLLM_USE_V1}")
         raise NotImplementedError(
             f"VLLM_USE_V1=1 is not supported with {feature_name}.")
     msg = f"{feature_name} is not supported by the V1 Engine. "
@@ -1506,6 +1507,7 @@ def _raise_or_fallback(feature_name: str, recommend_to_remove: bool):
 
 def _warn_or_fallback(feature_name: str) -> bool:
     if envs.is_set("VLLM_USE_V1") and envs.VLLM_USE_V1:
+        print(f"VLLM_USE_V1={envs.VLLM_USE_V1}")
         logger.warning(
             "Detected VLLM_USE_V1=1 with %s. Usage should "
             "be considered experimental. Please report any "
@@ -1522,7 +1524,7 @@ def _warn_or_fallback(feature_name: str) -> bool:
 def human_readable_int(value):
     """Parse human-readable integers like '1k', '2M', etc.
     Including decimal values with decimal multipliers.
-    
+
     Examples:
     - '1k' -> 1,000
     - '1K' -> 1,024

@@ -7,9 +7,15 @@ Test:
 
 import pytest
 import torch
-import torch_xla
-import torch_xla.core
-import torch_xla.core.xla_model
+try:
+    import torch_xla
+    import torch_xla.core
+    import torch_xla.core.xla_model
+except ImportError as e:
+    import platform
+    if platform.system() == "Darwin":
+        pytest.skip("torch_xla is not available on macOS", allow_module_level=True)
+    raise e
 
 from vllm import envs
 from vllm.attention.layer import MultiHeadAttention

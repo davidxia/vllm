@@ -1,11 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
 from unittest.mock import ANY, patch
 
+import pytest
 import torch
 
 from vllm.attention.backends.abstract import AttentionType
-from vllm.v1.attention.backends.pallas import (PallasAttentionBackendImpl,
-                                               PallasMetadata)
+try:
+    from vllm.v1.attention.backends.pallas import (PallasAttentionBackendImpl,
+                                                   PallasMetadata)
+except ImportError as e:
+    import platform
+    if platform.system() == "Darwin":
+        pytest.skip("vllm.v1.attention.backends.pallas cannot be imported on macOS", allow_module_level=True)
+    raise e
 
 
 def test_ragged_paged_attention():
