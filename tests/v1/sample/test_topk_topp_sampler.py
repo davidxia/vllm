@@ -1,4 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
+
+import pytest
+
+from vllm.platforms import current_platform
+
+if current_platform.is_cpu():
+    pytest.skip("CUDA not available. Skipping", allow_module_level=True)
+
 import torch
 from torch import Generator
 

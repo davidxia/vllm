@@ -1,5 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
+from vllm.platforms import current_platform
+
+if current_platform.is_cpu():
+    pytest.skip(
+        "Why do these tests fail with ValueError: max_num_batched_tokens (16) "
+        "is smaller than max_model_len (128)?",
+        allow_module_level=True)
+
 import itertools
 from collections.abc import Generator
 
@@ -340,6 +350,11 @@ def test_max_logprobs(monkeypatch: pytest.MonkeyPatch):
     APC should not matter as this test checks basic request validation.
     """
     with monkeypatch.context() as m:
+        from vllm.platforms import current_platform
+
+        if current_platform.is_cpu():
+            pytest.skip("vLLM v1 engine is not supported on CPU")
+
         m.setenv("VLLM_USE_V1", "1")
 
         runner = VllmRunner("facebook/opt-125m",

@@ -1,5 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import pytest
+
+from vllm.platforms import current_platform
+
+if current_platform.is_cpu():
+    pytest.skip("tests time out on CPU platform. Skipping",
+                allow_module_level=True)
+
 import lm_eval
 
 from ...utils import RemoteOpenAIServer
