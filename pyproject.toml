@@ -162,6 +162,8 @@ markers = [
     "distributed: run this test only in distributed GPU tests",
     "skip_v1: do not run this test with v1",
     "optional: optional tests that are automatically skipped, include --optional to run them",
+    "timeout: used by pytest-timeout to run this test with a timeout",
+    "asyncio: used by pytest-asyncio to run this test with asyncio",
 ]
 
 [tool.pymarkdown]
