@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import enum
+import importlib
 import json
 import os
 import time
@@ -18,30 +19,10 @@ from huggingface_hub.utils import (EntryNotFoundError, HfHubHTTPError,
                                    RevisionNotFoundError)
 from torch import nn
 from transformers import GenerationConfig, PretrainedConfig
-from transformers.models.auto.image_processing_auto import (
-    get_image_processor_config)
-from transformers.models.auto.modeling_auto import (
-    MODEL_FOR_CAUSAL_LM_MAPPING_NAMES)
 from transformers.utils import CONFIG_NAME as HF_CONFIG_NAME
 
 from vllm.envs import VLLM_USE_MODELSCOPE
 from vllm.logger import init_logger
-# yapf conflicts with isort for this block
-# yapf: disable
-from vllm.transformers_utils.configs import (ChatGLMConfig, Cohere2Config,
-                                             DbrxConfig, DeepseekVLV2Config,
-                                             EAGLEConfig, ExaoneConfig,
-                                             H2OVLChatConfig,
-                                             InternVLChatConfig, JAISConfig,
-                                             KimiVLConfig, MedusaConfig,
-                                             MiniMaxText01Config,
-                                             MiniMaxVL01Config, MllamaConfig,
-                                             MLPSpeculatorConfig, MPTConfig,
-                                             NemotronConfig, NVLM_D_Config,
-                                             OvisConfig, RWConfig,
-                                             SkyworkR1VChatConfig, SolarConfig,
-                                             Telechat2Config, UltravoxConfig)
-# yapf: enable
 from vllm.transformers_utils.utils import check_gguf_file
 from vllm.utils import resolve_obj_by_qualname
 
@@ -55,37 +36,50 @@ HF_TOKEN = os.getenv('HF_TOKEN', None)
 
 logger = init_logger(__name__)
 
-_CONFIG_REGISTRY_OVERRIDE_HF: dict[str, type[PretrainedConfig]] = {
-    "mllama": MllamaConfig
-}
+_CONFIG_REGISTRY_OVERRIDE_HF: dict[str, str] = {"mllama": "MllamaConfig"}
 
-_CONFIG_REGISTRY: dict[str, type[PretrainedConfig]] = {
-    "chatglm": ChatGLMConfig,
-    "cohere2": Cohere2Config,
-    "dbrx": DbrxConfig,
-    "deepseek_vl_v2": DeepseekVLV2Config,
-    "kimi_vl": KimiVLConfig,
-    "mpt": MPTConfig,
-    "RefinedWeb": RWConfig,  # For tiiuae/falcon-40b(-instruct)
-    "RefinedWebModel": RWConfig,  # For tiiuae/falcon-7b(-instruct)
-    "jais": JAISConfig,
-    "mlp_speculator": MLPSpeculatorConfig,
-    "medusa": MedusaConfig,
-    "eagle": EAGLEConfig,
-    "exaone": ExaoneConfig,
-    "h2ovl_chat": H2OVLChatConfig,
-    "internvl_chat": InternVLChatConfig,
-    "minimax_text_01": MiniMaxText01Config,
-    "minimax_vl_01": MiniMaxVL01Config,
-    "nemotron": NemotronConfig,
-    "NVLM_D": NVLM_D_Config,
-    "ovis": OvisConfig,
-    "solar": SolarConfig,
-    "skywork_chat": SkyworkR1VChatConfig,
-    "telechat": Telechat2Config,
-    "ultravox": UltravoxConfig,
+_CONFIG_REGISTRY: dict[str, str] = {
+    "chatglm": "ChatGLMConfig",
+    "cohere2": "Cohere2Config",
+    "dbrx": "DbrxConfig",
+    "deepseek_vl_v2": "DeepseekVLV2Config",
+    "kimi_vl": "KimiVLConfig",
+    "mpt": "MPTConfig",
+    "RefinedWeb": "RWConfig",  # For tiiuae/falcon-40b(-instruct)
+    "RefinedWebModel": "RWConfig",  # For tiiuae/falcon-7b(-instruct)
+    "jais": "JAISConfig",
+    "mlp_speculator": "MLPSpeculatorConfig",
+    "medusa": "MedusaConfig",
+    "eagle": "EAGLEConfig",
+    "exaone": "ExaoneConfig",
+    "h2ovl_chat": "H2OVLChatConfig",
+    "internvl_chat": "InternVLChatConfig",
+    "minimax_text_01": "MiniMaxText01Config",
+    "minimax_vl_01": "MiniMaxVL01Config",
+    "nemotron": "NemotronConfig",
+    "NVLM_D": "NVLM_D_Config",
+    "ovis": "OvisConfig",
+    "solar": "SolarConfig",
+    "skywork_chat": "SkyworkR1VChatConfig",
+    "telechat": "Telechat2Config",
+    "ultravox": "UltravoxConfig",
     **_CONFIG_REGISTRY_OVERRIDE_HF
 }
+
+
+def get_config_class(key: str) -> type:
+    config_class_name = _CONFIG_REGISTRY[key]
+    module_path = "vllm.transformers_utils.configs"
+
+    try:
+        module = importlib.import_module(module_path)
+        config_class = getattr(module, config_class_name)
+    except (ModuleNotFoundError, AttributeError) as e:
+        raise ValueError(
+            f"Failed to import config class '{config_class_name}' "
+            f"from module '{module_path}'.") from e
+
+    return config_class
 
 
 class ConfigFormat(str, enum.Enum):
@@ -268,6 +262,9 @@ def get_config(
     config_format: ConfigFormat = ConfigFormat.AUTO,
     **kwargs,
 ) -> PretrainedConfig:
+    from transformers.models.auto.modeling_auto import (
+        MODEL_FOR_CAUSAL_LM_MAPPING_NAMES)
+
     # Separate model folder from file path for GGUF models
 
     is_gguf = check_gguf_file(model)
@@ -749,6 +746,9 @@ def get_hf_image_processor_config(
     revision: Optional[str] = None,
     **kwargs,
 ) -> dict[str, Any]:
+    from transformers.models.auto.image_processing_auto import (
+        get_image_processor_config)
+
     # ModelScope does not provide an interface for image_processor
     if VLLM_USE_MODELSCOPE:
         return dict()
