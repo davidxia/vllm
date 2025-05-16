@@ -10,8 +10,9 @@ import threading
 import warnings
 from dataclasses import MISSING, dataclass, fields, is_dataclass
 from itertools import permutations
-from typing import (Annotated, Any, Callable, Dict, List, Literal, Optional,
-                    Type, TypeVar, Union, cast, get_args, get_origin)
+from typing import (TYPE_CHECKING, Annotated, Any, Callable, Dict, List,
+                    Literal, Optional, Type, TypeVar, Union, cast, get_args,
+                    get_origin)
 
 import torch
 from typing_extensions import TypeIs, deprecated
@@ -31,7 +32,6 @@ from vllm.config import (BlockSize, CacheConfig, CacheDType, CompilationConfig,
                          VllmConfig, get_attr_docs, get_field)
 from vllm.executor.executor_base import ExecutorBase
 from vllm.logger import init_logger
-from vllm.model_executor.layers.quantization import QuantizationMethods
 from vllm.plugins import load_general_plugins
 from vllm.reasoning import ReasoningParserManager
 from vllm.test_utils import MODEL_WEIGHTS_S3_BUCKET, MODELS_ON_S3
@@ -41,6 +41,9 @@ from vllm.utils import (STR_DUAL_CHUNK_FLASH_ATTN_VAL, FlexibleArgumentParser,
                         GiB_bytes, is_in_doc_build, is_in_ray_actor)
 
 # yapf: enable
+
+if TYPE_CHECKING:
+    from vllm.model_executor.layers.quantization import QuantizationMethods
 
 logger = init_logger(__name__)
 
@@ -322,7 +325,7 @@ class EngineArgs:
     hf_overrides: Optional[HfOverrides] = \
         get_field(ModelConfig, "hf_overrides")
     tokenizer_revision: Optional[str] = ModelConfig.tokenizer_revision
-    quantization: Optional[QuantizationMethods] = ModelConfig.quantization
+    quantization: Optional["QuantizationMethods"] = ModelConfig.quantization
     enforce_eager: bool = ModelConfig.enforce_eager
     max_seq_len_to_capture: int = ModelConfig.max_seq_len_to_capture
     disable_custom_all_reduce: bool = ParallelConfig.disable_custom_all_reduce

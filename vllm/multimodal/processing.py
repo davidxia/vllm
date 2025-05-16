@@ -15,11 +15,8 @@ from typing import (TYPE_CHECKING, Generic, NamedTuple, Optional, Protocol,
 import torch
 from typing_extensions import assert_never
 
-from vllm.inputs import InputProcessingContext
 from vllm.jsontree import json_map_leaves, json_reduce_leaves
 from vllm.logger import init_logger
-from vllm.transformers_utils.tokenizer import (AnyTokenizer, decode_tokens,
-                                               encode_tokens)
 from vllm.utils import GiB_bytes, LRUCache, flatten_2d_lists, full_groupby
 
 from .hasher import MultiModalHasher
@@ -34,6 +31,9 @@ if TYPE_CHECKING:
     from transformers.feature_extraction_utils import BatchFeature
     from transformers.processing_utils import ProcessorMixin
 
+    from vllm.inputs import InputProcessingContext
+    from vllm.transformers_utils.tokenizer import AnyTokenizer
+
     from .profiling import BaseDummyInputsBuilder
 
 logger = init_logger(__name__)
@@ -47,7 +47,7 @@ PromptSeq = Union[str, list[int]]
 @dataclass
 class PromptIndex:
     """Resolves to an index in the prompt."""
-    get_match_index: Callable[[AnyTokenizer, PromptSeq], Optional[int]]
+    get_match_index: Callable[["AnyTokenizer", PromptSeq], Optional[int]]
 
 
 class PromptIndexTargets:
@@ -68,9 +68,12 @@ class PromptIndexTargets:
         """
 
         def get_match_index(
-            tokenizer: AnyTokenizer,
+            tokenizer: "AnyTokenizer",
             prompt: PromptSeq,
         ) -> Optional[int]:
+            from vllm.transformers_utils.tokenizer import (decode_tokens,
+                                                           encode_tokens)
+
             prefix = seq
 
             if isinstance(prompt, str):
@@ -134,6 +137,8 @@ class PromptUpdateDetails(Generic[_S]):
     ) -> "PromptUpdateDetails[_S]":
 
         def is_embed(full: "_BoundPromptSequence") -> torch.Tensor:
+            from vllm.transformers_utils.tokenizer import encode_tokens
+
             embed_token_ids = encode_tokens(full.tokenizer, embed_text)
 
             return torch.isin(
@@ -202,7 +207,7 @@ class PromptUpdate(ABC):
         """Defines how to update the prompt."""
         raise NotImplementedError
 
-    def bind(self, tokenizer: AnyTokenizer) -> "BoundPromptUpdate":
+    def bind(self, tokenizer: "AnyTokenizer") -> "BoundPromptUpdate":
         return BoundPromptUpdate(
             _origin=self,
             tokenizer=tokenizer,
@@ -350,11 +355,13 @@ class PromptReplacement(PromptUpdate):
 
 @lru_cache(maxsize=2048)
 def _cached_encode(
-    tokenizer: AnyTokenizer,
+    tokenizer: "AnyTokenizer",
     text: str,
     *,
     add_special_tokens: Optional[bool] = None,
 ) -> list[int]:
+    from vllm.transformers_utils.tokenizer import encode_tokens
+
     return encode_tokens(tokenizer,
                          text,
                          add_special_tokens=add_special_tokens)
@@ -362,11 +369,13 @@ def _cached_encode(
 
 @lru_cache(maxsize=2048)
 def _cached_decode(
-    tokenizer: AnyTokenizer,
+    tokenizer: "AnyTokenizer",
     token_ids: tuple[int, ...],
     *,
     skip_special_tokens: Optional[bool] = None,
 ) -> str:
+    from vllm.transformers_utils.tokenizer import decode_tokens
+
     return decode_tokens(tokenizer,
                          list(token_ids),
                          skip_special_tokens=skip_special_tokens)
@@ -397,14 +406,14 @@ class _BoundPromptSequence:
     A {data}`_PromptSeq` bound to a tokenizer to automatically
     convert between token sequence and text representations.
     """
-    tokenizer: AnyTokenizer = field(repr=False)
+    tokenizer: "AnyTokenizer" = field(repr=False)
 
     _text: Optional[str]
     _token_ids: Optional[list[int]]
 
     @staticmethod
     def from_seq(
-        tokenizer: AnyTokenizer,
+        tokenizer: "AnyTokenizer",
         seq: PromptSeq,
     ) -> "_BoundPromptSequence":
         return _BoundPromptSequence(
@@ -451,7 +460,7 @@ class BoundPromptUpdate:
     token sequence and text representations.
     """
     _origin: PromptUpdate
-    tokenizer: AnyTokenizer = field(repr=False)
+    tokenizer: "AnyTokenizer" = field(repr=False)
 
     def __post_init__(self) -> None:
         self._content_cache = dict[int, _BoundPromptContent]()
@@ -1038,7 +1047,7 @@ class ProcessingCache:
 class BaseProcessingInfo:
     """Base class to provide the information necessary for data processing."""
 
-    def __init__(self, ctx: InputProcessingContext) -> None:
+    def __init__(self, ctx: "InputProcessingContext") -> None:
         super().__init__()
 
         self.ctx = ctx
@@ -1047,7 +1056,7 @@ class BaseProcessingInfo:
     def model_id(self) -> str:
         return self.ctx.model_config.model
 
-    def get_tokenizer(self) -> AnyTokenizer:
+    def get_tokenizer(self) -> "AnyTokenizer":
         return self.ctx.tokenizer
 
     def get_hf_config(self) -> "PretrainedConfig":
@@ -1583,6 +1592,9 @@ class BaseMultiModalProcessor(ABC, Generic[_I]):
         mm_prompt_updates: Mapping[str, Sequence[BoundPromptUpdate]],
         mm_item_counts: Mapping[str, int],
     ) -> tuple[list[int], str, Mapping[str, list[PlaceholderFeaturesInfo]]]:
+        from vllm.transformers_utils.tokenizer import (decode_tokens,
+                                                       encode_tokens)
+
         tokenizer = self.info.get_tokenizer()
 
         mm_token_matches = {
@@ -1698,6 +1710,8 @@ class BaseMultiModalProcessor(ABC, Generic[_I]):
         mm_kwargs: MultiModalKwargs,
         is_update_applied: bool,
     ) -> tuple[list[int], str, Mapping[str, list[PlaceholderFeaturesInfo]]]:
+        from vllm.transformers_utils.tokenizer import decode_tokens
+
         unbound_prompt_updates = self._get_prompt_updates(
             mm_items,
             hf_processor_mm_kwargs,
@@ -1822,6 +1836,9 @@ class EncDecMultiModalProcessor(BaseMultiModalProcessor[_I]):
         mm_data: MultiModalDataDict,
         encoder_inputs: MultiModalInputs,
     ):
+        from vllm.transformers_utils.tokenizer import (decode_tokens,
+                                                       encode_tokens)
+
         tokenizer = self.info.get_tokenizer()
         decoder_prompt = self.create_decoder_prompt(prompt, mm_data)
         if isinstance(decoder_prompt, str):

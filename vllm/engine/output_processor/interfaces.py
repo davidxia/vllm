@@ -1,15 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from typing import Callable, List
+from typing import TYPE_CHECKING, Callable, List
 
 from vllm.config import SchedulerConfig
-from vllm.core.scheduler import Scheduler
-from vllm.engine.output_processor.stop_checker import StopChecker
-from vllm.sequence import Sequence, SequenceGroup, SequenceGroupOutput
-from vllm.transformers_utils.detokenizer import Detokenizer
-from vllm.transformers_utils.tokenizer import AnyTokenizer
 from vllm.utils import Counter
+
+if TYPE_CHECKING:
+    from vllm.core.scheduler import Scheduler
+    from vllm.engine.output_processor.stop_checker import StopChecker
+    from vllm.sequence import Sequence, SequenceGroup, SequenceGroupOutput
+    from vllm.transformers_utils.detokenizer import Detokenizer
+    from vllm.transformers_utils.tokenizer import AnyTokenizer
 
 
 class SequenceGroupOutputProcessor(ABC):
@@ -27,10 +29,10 @@ class SequenceGroupOutputProcessor(ABC):
     @staticmethod
     def create_output_processor(
         scheduler_config: SchedulerConfig,
-        detokenizer: Detokenizer,
-        scheduler: List[Scheduler],
+        detokenizer: "Detokenizer",
+        scheduler: List["Scheduler"],
         seq_counter: Counter,
-        get_tokenizer_for_seq: Callable[[Sequence], AnyTokenizer],
+        get_tokenizer_for_seq: Callable[["Sequence"], "AnyTokenizer"],
         stop_checker: "StopChecker",
     ):
         """Create an output processor.
@@ -58,8 +60,8 @@ class SequenceGroupOutputProcessor(ABC):
             )
 
     @abstractmethod
-    def process_outputs(self, sequence_group: SequenceGroup,
-                        outputs: List[SequenceGroupOutput],
+    def process_outputs(self, sequence_group: "SequenceGroup",
+                        outputs: List["SequenceGroupOutput"],
                         is_async: bool) -> None:
         """Process new token ids for the sequence group. Handles logic such as
         detokenization, stop checking, and freeing/forking sequences in the
@@ -68,7 +70,7 @@ class SequenceGroupOutputProcessor(ABC):
         pass
 
     @abstractmethod
-    def process_prompt_logprob(self, seq_group: SequenceGroup,
-                               outputs: List[SequenceGroupOutput]) -> None:
+    def process_prompt_logprob(self, seq_group: "SequenceGroup",
+                               outputs: List["SequenceGroupOutput"]) -> None:
         """Update prompt logprobs received from outputs to seq_group."""
         pass

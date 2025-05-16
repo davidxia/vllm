@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 
 from vllm.lora.request import LoRARequest
 from vllm.sampling_params import SamplingParams
-from vllm.sequence import Sequence, SequenceStatus
 from vllm.transformers_utils.tokenizer import AnyTokenizer
+
+if TYPE_CHECKING:
+    from vllm.sequence import Sequence
 
 
 class StopChecker:
@@ -16,7 +18,7 @@ class StopChecker:
     """
 
     def __init__(self, max_model_len: int,
-                 get_tokenizer_for_seq: Callable[[Sequence], AnyTokenizer]):
+                 get_tokenizer_for_seq: Callable[["Sequence"], AnyTokenizer]):
         # Do not use it directly, but use `self._get_max_model_len`.
         self._max_model_len = max_model_len
         self.get_tokenizer_for_seq = get_tokenizer_for_seq
@@ -29,7 +31,7 @@ class StopChecker:
 
     def maybe_stop_sequence(
         self,
-        seq: Sequence,
+        seq: "Sequence",
         new_char_count: int,
         sampling_params: SamplingParams,
         lora_req: Optional[LoRARequest] = None,
@@ -39,6 +41,7 @@ class StopChecker:
        new_char_count is the number of chars added to the
            sequence's output text for the newly generated token
         """
+        from vllm.sequence import SequenceStatus
 
         # Check if the minimum number of tokens has been generated yet;
         # skip the stop string/token checks if not

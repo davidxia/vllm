@@ -2,14 +2,11 @@
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Mapping, Optional
+from typing import TYPE_CHECKING, AsyncGenerator, Mapping, Optional
 
 from vllm.beam_search import BeamSearchSequence, create_sort_beams_key_function
 from vllm.config import DecodingConfig, ModelConfig, VllmConfig
 from vllm.core.scheduler import SchedulerOutputs
-from vllm.inputs.data import PromptType, TokensPrompt
-from vllm.inputs.parse import is_explicit_encoder_decoder_prompt
-from vllm.inputs.preprocess import InputPreprocessor
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.model_executor.layers.sampler import SamplerOutput
@@ -17,8 +14,12 @@ from vllm.outputs import CompletionOutput, PoolingRequestOutput, RequestOutput
 from vllm.pooling_params import PoolingParams
 from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sampling_params import BeamSearchParams, SamplingParams
-from vllm.transformers_utils.tokenizer import AnyTokenizer
 from vllm.utils import Device, collect_from_async_generator, random_uuid
+
+if TYPE_CHECKING:
+    from vllm.inputs.data import PromptType
+    from vllm.inputs.preprocess import InputPreprocessor
+    from vllm.transformers_utils.tokenizer import AnyTokenizer
 
 logger = init_logger(__name__)
 
@@ -49,7 +50,7 @@ class EngineClient(ABC):
     @abstractmethod
     def generate(
         self,
-        prompt: PromptType,
+        prompt: "PromptType",
         sampling_params: SamplingParams,
         request_id: str,
         lora_request: Optional[LoRARequest] = None,
@@ -62,10 +63,12 @@ class EngineClient(ABC):
 
     async def beam_search(
         self,
-        prompt: PromptType,
+        prompt: "PromptType",
         request_id: str,
-        params: BeamSearchParams,
+        params: "BeamSearchParams",
     ) -> AsyncGenerator[RequestOutput, None]:
+        from vllm.inputs.data import TokensPrompt
+        from vllm.inputs.parse import is_explicit_encoder_decoder_prompt
 
         beam_width = params.beam_width
         max_tokens = params.max_tokens
@@ -204,7 +207,7 @@ class EngineClient(ABC):
     @abstractmethod
     def encode(
         self,
-        prompt: PromptType,
+        prompt: "PromptType",
         pooling_params: PoolingParams,
         request_id: str,
         lora_request: Optional[LoRARequest] = None,
@@ -239,7 +242,7 @@ class EngineClient(ABC):
         ...
 
     @abstractmethod
-    async def get_input_preprocessor(self) -> InputPreprocessor:
+    async def get_input_preprocessor(self) -> "InputPreprocessor":
         """Get the input processor of the vLLM engine."""
         ...
 
@@ -247,7 +250,7 @@ class EngineClient(ABC):
     async def get_tokenizer(
         self,
         lora_request: Optional[LoRARequest] = None,
-    ) -> AnyTokenizer:
+    ) -> "AnyTokenizer":
         """Get the appropriate tokenizer for the request"""
         ...
 

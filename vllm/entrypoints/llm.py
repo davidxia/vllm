@@ -4,7 +4,8 @@ import itertools
 import warnings
 from collections.abc import Sequence
 from contextlib import contextmanager
-from typing import Any, Callable, ClassVar, Optional, Union, cast, overload
+from typing import (TYPE_CHECKING, Any, Callable, ClassVar, Optional, Union,
+                    cast, overload)
 
 import cloudpickle
 import torch.nn as nn
@@ -18,17 +19,8 @@ from vllm.config import (CompilationConfig, ModelDType, TokenizerMode,
 from vllm.engine.arg_utils import (EngineArgs, HfOverrides, PoolerConfig,
                                    TaskOption)
 from vllm.engine.llm_engine import LLMEngine
-from vllm.entrypoints.chat_utils import (ChatCompletionMessageParam,
-                                         ChatTemplateContentFormatOption,
-                                         apply_hf_chat_template,
-                                         apply_mistral_chat_template,
-                                         parse_chat_messages,
-                                         resolve_chat_template_content_format)
 from vllm.entrypoints.score_utils import (_cosine_similarity,
                                           _validate_score_input_lens)
-from vllm.entrypoints.utils import _validate_truncation_size
-from vllm.inputs import PromptType, SingletonPrompt, TextPrompt, TokensPrompt
-from vllm.inputs.parse import parse_and_batch_prompt
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.model_executor.guided_decoding.guided_fields import (
@@ -46,6 +38,12 @@ from vllm.transformers_utils.tokenizer import (AnyTokenizer, MistralTokenizer,
 from vllm.usage.usage_lib import UsageContext
 from vllm.utils import (Counter, Device, deprecate_args, deprecate_kwargs,
                         is_list_of)
+
+if TYPE_CHECKING:
+    from vllm.entrypoints.chat_utils import (ChatCompletionMessageParam,
+                                             ChatTemplateContentFormatOption)
+    from vllm.inputs import (PromptType, SingletonPrompt, TextPrompt,
+                             TokensPrompt)
 
 logger = init_logger(__name__)
 
@@ -283,7 +281,7 @@ class LLM:
     @overload
     def generate(
         self,
-        prompts: Union[PromptType, Sequence[PromptType]],
+        prompts: Union["PromptType", Sequence["PromptType"]],
         /,
         sampling_params: Optional[Union[SamplingParams,
                                         Sequence[SamplingParams]]] = None,
@@ -384,7 +382,7 @@ class LLM:
     )
     def generate(
         self,
-        prompts: Union[Union[PromptType, Sequence[PromptType]],
+        prompts: Union[Union["PromptType", Sequence["PromptType"]],
                        Optional[Union[str, list[str]]]] = None,
         sampling_params: Optional[Union[SamplingParams,
                                         Sequence[SamplingParams]]] = None,
@@ -451,7 +449,7 @@ class LLM:
                 prompt_token_ids=prompt_token_ids,
             )
         else:
-            parsed_prompts = cast(Union[PromptType, Sequence[PromptType]],
+            parsed_prompts = cast(Union["PromptType", Sequence["PromptType"]],
                                   prompts)
 
         if isinstance(guided_options_request, dict):
@@ -520,7 +518,7 @@ class LLM:
 
     def beam_search(
         self,
-        prompts: list[Union[TokensPrompt, TextPrompt]],
+        prompts: list[Union["TokensPrompt", "TextPrompt"]],
         params: BeamSearchParams,
     ) -> list[BeamSearchOutput]:
         """
@@ -531,6 +529,8 @@ class LLM:
                 of token IDs.
             params: The beam search parameters.
         """
+        from vllm.inputs import TokensPrompt
+
         # TODO: how does beam search work together with length penalty,
         # frequency, penalty, and stopping criteria, etc.?
         beam_width = params.beam_width
@@ -545,7 +545,7 @@ class LLM:
                                          length_penalty)
 
         def create_tokens_prompt_from_beam(
-                beam: BeamSearchSequence) -> TokensPrompt:
+                beam: BeamSearchSequence) -> "TokensPrompt":
             token_prompt_kwargs: TokensPrompt = {
                 "prompt_token_ids": beam.tokens
             }
@@ -654,14 +654,15 @@ class LLM:
 
     def chat(
         self,
-        messages: Union[list[ChatCompletionMessageParam],
-                        list[list[ChatCompletionMessageParam]]],
+        messages: Union[list["ChatCompletionMessageParam"],
+                        list[list["ChatCompletionMessageParam"]]],
         sampling_params: Optional[Union[SamplingParams,
                                         list[SamplingParams]]] = None,
         use_tqdm: bool = True,
         lora_request: Optional[LoRARequest] = None,
         chat_template: Optional[str] = None,
-        chat_template_content_format: ChatTemplateContentFormatOption = "auto",
+        chat_template_content_format:
+        "ChatTemplateContentFormatOption" = "auto",
         add_generation_prompt: bool = True,
         continue_final_message: bool = False,
         tools: Optional[list[dict[str, Any]]] = None,
@@ -715,17 +716,22 @@ class LLM:
             A list of ``RequestOutput`` objects containing the generated
             responses in the same order as the input messages.
         """
+        from vllm.entrypoints.chat_utils import (
+            apply_hf_chat_template, apply_mistral_chat_template,
+            parse_chat_messages, resolve_chat_template_content_format)
+        from vllm.inputs import TokensPrompt
+
         list_of_messages: list[list[ChatCompletionMessageParam]]
 
         # Handle multi and single conversations
         if is_list_of(messages, list):
             # messages is list[list[...]]
-            list_of_messages = cast(list[list[ChatCompletionMessageParam]],
+            list_of_messages = cast(list[list["ChatCompletionMessageParam"]],
                                     messages)
         else:
             # messages is list[...]
             list_of_messages = [
-                cast(list[ChatCompletionMessageParam], messages)
+                cast(list["ChatCompletionMessageParam"], messages)
             ]
 
         tokenizer = self.get_tokenizer(lora_request)
@@ -797,7 +803,7 @@ class LLM:
     @overload
     def encode(
         self,
-        prompts: Union[PromptType, Sequence[PromptType]],
+        prompts: Union["PromptType", Sequence["PromptType"]],
         /,
         pooling_params: Optional[Union[PoolingParams,
                                        Sequence[PoolingParams]]] = None,
@@ -892,7 +898,7 @@ class LLM:
     )
     def encode(
         self,
-        prompts: Union[Union[PromptType, Sequence[PromptType]],
+        prompts: Union[Union["PromptType", Sequence["PromptType"]],
                        Optional[Union[str, list[str]]]] = None,
         pooling_params: Optional[Union[PoolingParams,
                                        Sequence[PoolingParams]]] = None,
@@ -930,6 +936,8 @@ class LLM:
         instead pass them via the `inputs` parameter.
         :::
         """
+        from vllm.entrypoints.utils import _validate_truncation_size
+
         runner_type = self.llm_engine.model_config.runner_type
         if runner_type != "pooling":
             messages = ["LLM.encode() is only supported for pooling models."]
@@ -951,7 +959,7 @@ class LLM:
                 prompt_token_ids=prompt_token_ids,
             )
         else:
-            parsed_prompts = cast(Union[PromptType, Sequence[PromptType]],
+            parsed_prompts = cast(Union["PromptType", Sequence["PromptType"]],
                                   prompts)
 
         if pooling_params is None:
@@ -982,7 +990,7 @@ class LLM:
 
     def embed(
         self,
-        prompts: Union[PromptType, Sequence[PromptType]],
+        prompts: Union["PromptType", Sequence["PromptType"]],
         /,
         *,
         truncate_prompt_tokens: Optional[int] = None,
@@ -1029,7 +1037,7 @@ class LLM:
 
     def classify(
         self,
-        prompts: Union[PromptType, Sequence[PromptType]],
+        prompts: Union["PromptType", Sequence["PromptType"]],
         /,
         *,
         use_tqdm: bool = True,
@@ -1070,8 +1078,8 @@ class LLM:
     def _embedding_score(
         self,
         tokenizer: AnyTokenizer,
-        text_1: list[Union[str, TextPrompt, TokensPrompt]],
-        text_2: list[Union[str, TextPrompt, TokensPrompt]],
+        text_1: list[Union[str, "TextPrompt", "TokensPrompt"]],
+        text_2: list[Union[str, "TextPrompt", "TokensPrompt"]],
         truncate_prompt_tokens: Optional[int] = None,
         use_tqdm: bool = True,
         lora_request: Optional[Union[list[LoRARequest], LoRARequest]] = None,
@@ -1111,6 +1119,8 @@ class LLM:
         lora_request: Optional[Union[list[LoRARequest], LoRARequest]] = None,
         prompt_adapter_request: Optional[PromptAdapterRequest] = None,
     ) -> list[ScoringRequestOutput]:
+        from vllm.entrypoints.utils import _validate_truncation_size
+        from vllm.inputs import TokensPrompt
 
         if isinstance(tokenizer, MistralTokenizer):
             raise ValueError(
@@ -1154,8 +1164,8 @@ class LLM:
 
     def score(
         self,
-        text_1: Union[SingletonPrompt, Sequence[SingletonPrompt]],
-        text_2: Union[SingletonPrompt, Sequence[SingletonPrompt]],
+        text_1: Union["SingletonPrompt", Sequence["SingletonPrompt"]],
+        text_2: Union["SingletonPrompt", Sequence["SingletonPrompt"]],
         /,
         *,
         truncate_prompt_tokens: Optional[int] = None,
@@ -1188,6 +1198,8 @@ class LLM:
             A list of ``ScoringRequestOutput`` objects containing the
             generated scores in the same order as the input prompts.
         """
+        from vllm.inputs import TextPrompt, TokensPrompt
+
         runner_type = self.llm_engine.model_config.runner_type
         if runner_type != "pooling":
             messages = ["LLM.score() is only supported for pooling models."]
@@ -1212,7 +1224,7 @@ class LLM:
         # lists of tokens to the `text` and `text_pair` kwargs
         tokenizer = self.llm_engine.get_tokenizer()
 
-        def ensure_str(prompt: SingletonPrompt):
+        def ensure_str(prompt: "SingletonPrompt"):
             if isinstance(prompt, dict):
                 if "multi_modal_data" in prompt:
                     raise ValueError("Multi-modal prompt is not "
@@ -1269,16 +1281,16 @@ class LLM:
         during the sleep period, before `wake_up` is called.
 
         Args:
-            level: The sleep level. Level 1 sleep will offload the model 
-                weights and discard the kv cache. The content of kv cache 
+            level: The sleep level. Level 1 sleep will offload the model
+                weights and discard the kv cache. The content of kv cache
                 is forgotten. Level 1 sleep is good for sleeping and waking
-                up the engine to run the same model again. The model weights 
-                are backed up in CPU memory. Please make sure there's enough 
-                CPU memory to store the model weights. Level 2 sleep will 
-                discard both the model weights and the kv cache. The content 
-                of both the model weights and kv cache is forgotten. Level 2 
+                up the engine to run the same model again. The model weights
+                are backed up in CPU memory. Please make sure there's enough
+                CPU memory to store the model weights. Level 2 sleep will
+                discard both the model weights and the kv cache. The content
+                of both the model weights and kv cache is forgotten. Level 2
                 sleep is good for sleeping and waking up the engine to run a
-                different model or update the model, where previous model 
+                different model or update the model, where previous model
                 weights are not needed. It reduces CPU memory pressure.
         """
         self.reset_prefix_cache()
@@ -1288,12 +1300,12 @@ class LLM:
         """
         Wake up the engine from sleep mode. See the {meth}`sleep` method
         for more details.
-        
+
         Args:
-            tags: An optional list of tags to reallocate the engine memory 
-                for specific memory allocations. Values must be in 
+            tags: An optional list of tags to reallocate the engine memory
+                for specific memory allocations. Values must be in
                 ("weights", "kv_cache",). If None, all memory is reallocated.
-                wake_up should be called with all tags (or None) before the 
+                wake_up should be called with all tags (or None) before the
                 engine is used again.
         """
         self.llm_engine.wake_up(tags)
@@ -1304,6 +1316,9 @@ class LLM:
         prompts: Optional[Union[str, list[str]]],
         prompt_token_ids: Optional[Union[list[int], list[list[int]]]],
     ):
+        from vllm.inputs import TextPrompt, TokensPrompt
+        from vllm.inputs.parse import parse_and_batch_prompt
+
         # skip_tokenizer_init is now checked in engine
 
         if prompts is not None:
@@ -1344,7 +1359,7 @@ class LLM:
 
     def _validate_and_add_requests(
         self,
-        prompts: Union[PromptType, Sequence[PromptType]],
+        prompts: Union["PromptType", Sequence["PromptType"]],
         params: Union[SamplingParams, Sequence[SamplingParams], PoolingParams,
                       Sequence[PoolingParams]],
         *,
@@ -1401,7 +1416,7 @@ class LLM:
 
     def _add_request(
         self,
-        prompt: PromptType,
+        prompt: "PromptType",
         params: Union[SamplingParams, PoolingParams],
         tokenization_kwargs: Optional[dict[str, Any]] = None,
         lora_request: Optional[LoRARequest] = None,

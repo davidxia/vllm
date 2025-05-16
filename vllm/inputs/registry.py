@@ -7,7 +7,6 @@ from transformers import BatchFeature, PretrainedConfig, ProcessorMixin
 from typing_extensions import TypeVar
 
 from vllm.transformers_utils.processor import cached_processor_from_config
-from vllm.transformers_utils.tokenizer import AnyTokenizer
 from vllm.utils import resolve_mm_processor_kwargs
 
 if TYPE_CHECKING:
@@ -15,6 +14,7 @@ if TYPE_CHECKING:
     from vllm.multimodal import (MultiModalDataDict, MultiModalPlaceholderDict,
                                  MultiModalRegistry)
     from vllm.sequence import SequenceData
+    from vllm.transformers_utils.tokenizer import AnyTokenizer
 
 _T = TypeVar("_T")
 _C = TypeVar("_C", bound=PretrainedConfig, default=PretrainedConfig)
@@ -113,7 +113,7 @@ class InputContext:
 
 @dataclass(frozen=True)
 class InputProcessingContext(InputContext):
-    tokenizer: AnyTokenizer
+    tokenizer: "AnyTokenizer"
     """The tokenizer used to tokenize the inputs."""
 
     def get_hf_processor(

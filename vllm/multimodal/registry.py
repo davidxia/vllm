@@ -7,10 +7,7 @@ import torch.nn as nn
 from typing_extensions import deprecated
 
 from vllm.envs import VLLM_MM_INPUT_CACHE_GIB
-from vllm.inputs import InputProcessingContext
 from vllm.logger import init_logger
-from vllm.transformers_utils.tokenizer import (AnyTokenizer,
-                                               cached_tokenizer_from_config)
 from vllm.utils import ClassRegistry
 
 from .processing import (BaseMultiModalProcessor, BaseProcessingInfo,
@@ -20,6 +17,8 @@ from .profiling import (BaseDummyInputsBuilder, DummyDecoderData,
 
 if TYPE_CHECKING:
     from vllm.config import ModelConfig
+    from vllm.inputs import InputProcessingContext
+    from vllm.transformers_utils.tokenizer import AnyTokenizer
 
 logger = init_logger(__name__)
 
@@ -33,7 +32,7 @@ class ProcessingInfoFactory(Protocol[_I_co]):
 
     def __call__(
         self,
-        ctx: InputProcessingContext,
+        ctx: "InputProcessingContext",
     ) -> _I_co:
         ...
 
@@ -68,7 +67,7 @@ class _ProcessorFactories(Generic[_I]):
 
     def build_processor(
         self,
-        ctx: InputProcessingContext,
+        ctx: "InputProcessingContext",
         *,
         cache: Optional[ProcessingCache] = None,
     ):
@@ -254,7 +253,7 @@ class MultiModalRegistry:
         self,
         model_config: "ModelConfig",
         *,
-        tokenizer: Optional[AnyTokenizer] = None,
+        tokenizer: Optional["AnyTokenizer"] = None,
         disable_cache: Optional[bool] = None,
     ) -> BaseMultiModalProcessor[BaseProcessingInfo]:
         """
@@ -264,6 +263,10 @@ class MultiModalRegistry:
         {ref}`mm-processing`
         :::
         """
+        from vllm.inputs import InputProcessingContext
+        from vllm.transformers_utils.tokenizer import (
+            cached_tokenizer_from_config)
+
         if not model_config.is_multimodal_model:
             raise ValueError(f"{model_config.model} is not a multimodal model")
 

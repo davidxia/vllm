@@ -3,8 +3,8 @@
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from typing import (Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple,
-                    Union)
+from typing import (TYPE_CHECKING, Any, Awaitable, Callable, Dict, List,
+                    Optional, Set, Tuple, Union)
 
 import torch.nn as nn
 from typing_extensions import TypeVar
@@ -13,11 +13,13 @@ import vllm.platforms
 from vllm.config import VllmConfig
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
-from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.prompt_adapter.request import PromptAdapterRequest
-from vllm.sequence import ExecuteModelRequest, PoolerOutput
 from vllm.utils import make_async
-from vllm.worker.worker_base import WorkerBase
+
+if TYPE_CHECKING:
+    from vllm.model_executor.layers.sampler import SamplerOutput
+    from vllm.sequence import ExecuteModelRequest, PoolerOutput
+    from vllm.worker.worker_base import WorkerBase
 
 logger = init_logger(__name__)
 
@@ -28,7 +30,7 @@ class ExecutorBase(ABC):
     """Base class for all executors.
 
     An executor is responsible for executing the model on one device,
-    or it can be a distributed executor 
+    or it can be a distributed executor
     that can execute the model on multiple devices.
     """
 
@@ -80,7 +82,7 @@ class ExecutorBase(ABC):
 
         Returns:
             A list containing the results from each worker.
-        
+
         Note:
             It is recommended to use this API to only pass control messages,
             and set up data-plane communication to pass data.
@@ -129,14 +131,14 @@ class ExecutorBase(ABC):
         returning the result for each of them.
         """
 
-        def rpc_func(worker: WorkerBase) -> _R:
+        def rpc_func(worker: "WorkerBase") -> _R:
             return func(worker.get_model())
 
         return self.collective_rpc(rpc_func)
 
     def execute_model(
-        self, execute_model_req: ExecuteModelRequest
-    ) -> Optional[List[Union[SamplerOutput, PoolerOutput]]]:
+        self, execute_model_req: "ExecuteModelRequest"
+    ) -> Optional[List[Union["SamplerOutput", "PoolerOutput"]]]:
         output = self.collective_rpc("execute_model",
                                      args=(execute_model_req, ))
         return output[0]
@@ -260,7 +262,7 @@ class ExecutorBase(ABC):
 
     async def execute_model_async(
             self,
-            execute_model_req: ExecuteModelRequest) -> List[SamplerOutput]:
+            execute_model_req: "ExecuteModelRequest") -> List["SamplerOutput"]:
         """Executes one model step on the given sequences."""
         output = await make_async(self.execute_model)(execute_model_req)
         return output
@@ -287,8 +289,8 @@ class DistributedExecutorBase(ExecutorBase):
 
     def execute_model(
         self,
-        execute_model_req: ExecuteModelRequest,
-    ) -> List[SamplerOutput]:
+        execute_model_req: "ExecuteModelRequest",
+    ) -> List["SamplerOutput"]:
         # TODO: unify into collective_rpc
         if self.parallel_worker_tasks is None:
             self.parallel_worker_tasks = self._run_workers(
@@ -313,8 +315,8 @@ class DistributedExecutorBase(ExecutorBase):
 
     @abstractmethod
     def _driver_execute_model(
-        self, execute_model_req: Optional[ExecuteModelRequest]
-    ) -> Optional[List[SamplerOutput]]:
+        self, execute_model_req: Optional["ExecuteModelRequest"]
+    ) -> Optional[List["SamplerOutput"]]:
         """Run execute_model in the driver worker.
 
         Passing None will cause the driver to stop the model execution loop
@@ -346,7 +348,7 @@ class DistributedExecutorBase(ExecutorBase):
                 run only in the remote TP workers, not the driver worker.
                 It will also be run asynchronously and return a list of futures
                 rather than blocking on the results.
-        
+
         # TODO: simplify and merge with collective_rpc
         """
         raise NotImplementedError
@@ -359,7 +361,7 @@ class DistributedExecutorBase(ExecutorBase):
 
     async def execute_model_async(
             self,
-            execute_model_req: ExecuteModelRequest) -> List[SamplerOutput]:
+            execute_model_req: "ExecuteModelRequest") -> List["SamplerOutput"]:
         if self.parallel_worker_tasks is None:
             # Start model execution loop running in the parallel workers
             self.parallel_worker_tasks = asyncio.create_task(
@@ -382,8 +384,8 @@ class DistributedExecutorBase(ExecutorBase):
     @abstractmethod
     async def _driver_execute_model_async(
         self,
-        execute_model_req: Optional[ExecuteModelRequest] = None,
-    ) -> List[SamplerOutput]:
+        execute_model_req: Optional["ExecuteModelRequest"] = None,
+    ) -> List["SamplerOutput"]:
         """Execute the model asynchronously in the driver worker.
 
         Passing None will cause the driver to stop the model execution

@@ -4,15 +4,17 @@ import copy
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from functools import cached_property
-from typing import Annotated, Any, Optional, Union
+from typing import TYPE_CHECKING, Annotated, Any, Optional, Union
 
 import msgspec
 from pydantic import BaseModel
 from typing_extensions import deprecated
 
 from vllm.logger import init_logger
-from vllm.logits_process import LogitsProcessor
-from vllm.transformers_utils.tokenizer import AnyTokenizer
+
+if TYPE_CHECKING:
+    from vllm.logits_process import LogitsProcessor
+    from vllm.transformers_utils.tokenizer import AnyTokenizer
 
 logger = init_logger(__name__)
 
@@ -271,7 +273,7 @@ class SamplingParams(
         detokenize: bool = True,
         skip_special_tokens: bool = True,
         spaces_between_special_tokens: bool = True,
-        logits_processors: Optional[list[LogitsProcessor]] = None,
+        logits_processors: Optional[list["LogitsProcessor"]] = None,
         truncate_prompt_tokens: Optional[Annotated[int,
                                                    msgspec.Meta(ge=1)]] = None,
         output_kind: RequestOutputKind = RequestOutputKind.CUMULATIVE,
@@ -480,7 +482,7 @@ class SamplingParams(
                     eos_ids.update(self.stop_token_ids)
                     self.stop_token_ids = list(eos_ids)
 
-    def update_from_tokenizer(self, tokenizer: AnyTokenizer) -> None:
+    def update_from_tokenizer(self, tokenizer: "AnyTokenizer") -> None:
         if not self.bad_words:
             return
         self._bad_words_token_ids = []

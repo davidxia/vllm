@@ -19,25 +19,12 @@ import vllm.envs as envs
 from vllm.config import (DecodingConfig, LoRAConfig, ModelConfig,
                          ObservabilityConfig, ParallelConfig, SchedulerConfig,
                          VllmConfig)
-from vllm.core.scheduler import ScheduledSequenceGroup, SchedulerOutputs
 from vllm.engine.arg_utils import EngineArgs
-from vllm.engine.metrics_types import StatLoggerBase, Stats
 from vllm.engine.output_processor.interfaces import (
     SequenceGroupOutputProcessor)
-from vllm.engine.output_processor.stop_checker import StopChecker
-from vllm.engine.output_processor.util import create_output_by_sequence_group
-from vllm.entrypoints.openai.logits_processors import (
-    get_logits_processors as get_openai_logits_processors)
 from vllm.executor.executor_base import ExecutorBase
-from vllm.inputs import ProcessorInputs, PromptType, SingletonInputs
-from vllm.inputs.parse import split_enc_dec_inputs
-from vllm.inputs.preprocess import InputPreprocessor
 from vllm.logger import init_logger
-from vllm.logits_process import get_bad_words_logits_processors
 from vllm.lora.request import LoRARequest
-from vllm.model_executor.guided_decoding import (
-    get_local_guided_decoding_logits_processor)
-from vllm.model_executor.layers.sampler import SamplerOutput
 from vllm.multimodal import MULTIMODAL_REGISTRY, MultiModalRegistry
 from vllm.multimodal.processing import EncDecMultiModalProcessor
 from vllm.outputs import (PoolingRequestOutput, RequestOutput,
@@ -51,16 +38,20 @@ from vllm.sequence import (ExecuteModelRequest, ParallelSampleSequenceGroup,
                            SequenceGroupOutput, SequenceStatus)
 from vllm.tracing import (SpanAttributes, SpanKind, extract_trace_context,
                           init_tracer)
-from vllm.transformers_utils.detokenizer import Detokenizer
-from vllm.transformers_utils.tokenizer import AnyTokenizer
-from vllm.transformers_utils.tokenizer_group import (
-    TokenizerGroup, init_tokenizer_from_configs)
 from vllm.usage.usage_lib import (UsageContext, is_usage_stats_enabled,
                                   usage_message)
 from vllm.utils import (Counter, Device, deprecate_kwargs,
                         resolve_obj_by_qualname, weak_bind)
 from vllm.version import __version__ as VLLM_VERSION
 from vllm.worker.model_runner_base import InputProcessingError
+
+if TYPE_CHECKING:
+    from vllm.core.scheduler import ScheduledSequenceGroup, SchedulerOutputs
+    from vllm.engine.metrics_types import StatLoggerBase, Stats
+    from vllm.inputs import ProcessorInputs, PromptType, SingletonInputs
+    from vllm.model_executor.layers.sampler import SamplerOutput
+    from vllm.transformers_utils.tokenizer import AnyTokenizer
+    from vllm.transformers_utils.tokenizer_group import TokenizerGroup
 
 logger = init_logger(__name__)
 _LOCAL_LOGGING_INTERVAL_SEC = 5
@@ -73,15 +64,15 @@ _R = TypeVar("_R", default=Any)
 class SchedulerOutputState:
     """Caches the scheduler outputs for a virtual engine. Used for Multi-Step"""
     seq_group_metadata_list: Optional[List[SequenceGroupMetadata]] = None
-    scheduler_outputs: Optional[SchedulerOutputs] = None
+    scheduler_outputs: Optional["SchedulerOutputs"] = None
     allow_async_output_proc: bool = False
-    last_output: Optional[SamplerOutput] = None
+    last_output: Optional["SamplerOutput"] = None
 
 
 class OutputData(NamedTuple):
-    outputs: List[SamplerOutput]
-    seq_group_metadata_list: List[SequenceGroupMetadata]
-    scheduler_outputs: SchedulerOutputs
+    outputs: List["SamplerOutput"]
+    seq_group_metadata_list: List["SequenceGroupMetadata"]
+    scheduler_outputs: "SchedulerOutputs"
     is_async: bool
     is_last_step: bool
     # Indicates if this output is from the first step of the
@@ -105,9 +96,9 @@ class SchedulerContext:
 
         self.multi_step_stream_outputs: bool = multi_step_stream_outputs
 
-    def append_output(self, outputs: List[SamplerOutput],
-                      seq_group_metadata_list: List[SequenceGroupMetadata],
-                      scheduler_outputs: SchedulerOutputs, is_async: bool,
+    def append_output(self, outputs: List["SamplerOutput"],
+                      seq_group_metadata_list: List["SequenceGroupMetadata"],
+                      scheduler_outputs: "SchedulerOutputs", is_async: bool,
                       is_last_step: bool,
                       is_first_step_output: Optional[bool]):
         self.output_queue.append(
@@ -203,7 +194,7 @@ class LLMEngine:
 
         return outputs_
 
-    tokenizer: Optional[TokenizerGroup]
+    tokenizer: Optional["TokenizerGroup"]
 
     def __init__(
         self,
@@ -211,10 +202,14 @@ class LLMEngine:
         executor_class: Type[ExecutorBase],
         log_stats: bool,
         usage_context: UsageContext = UsageContext.ENGINE_CONTEXT,
-        stat_loggers: Optional[Dict[str, StatLoggerBase]] = None,
+        stat_loggers: Optional[Dict[str, "StatLoggerBase"]] = None,
         mm_registry: MultiModalRegistry = MULTIMODAL_REGISTRY,
         use_cached_outputs: bool = False,
     ) -> None:
+        from vllm.engine.output_processor.stop_checker import StopChecker
+        from vllm.inputs.preprocess import InputPreprocessor
+        from vllm.transformers_utils.detokenizer import Detokenizer
+
         if envs.VLLM_USE_V1:
             raise ValueError(
                 "Using V0 LLMEngine, but envs.VLLM_USE_V1=True. "
@@ -259,7 +254,7 @@ class LLMEngine:
 
         # Ensure that the function doesn't contain a reference to self,
         # to avoid engine GC issues
-        def get_tokenizer_for_seq(sequence: Sequence) -> AnyTokenizer:
+        def get_tokenizer_for_seq(sequence: Sequence) -> "AnyTokenizer":
             assert tokenizer_group, ("tokenizer_group cannot be None, "
                                      "make sure skip_tokenizer_init is False")
             return tokenizer_group.get_lora_tokenizer(sequence.lora_request)
@@ -481,7 +476,7 @@ class LLMEngine:
         cls,
         vllm_config: VllmConfig,
         usage_context: UsageContext = UsageContext.ENGINE_CONTEXT,
-        stat_loggers: Optional[Dict[str, StatLoggerBase]] = None,
+        stat_loggers: Optional[Dict[str, "StatLoggerBase"]] = None,
         disable_log_stats: bool = False,
     ) -> "LLMEngine":
         return cls(
@@ -497,7 +492,7 @@ class LLMEngine:
         cls,
         engine_args: EngineArgs,
         usage_context: UsageContext = UsageContext.ENGINE_CONTEXT,
-        stat_loggers: Optional[Dict[str, StatLoggerBase]] = None,
+        stat_loggers: Optional[Dict[str, "StatLoggerBase"]] = None,
     ) -> "LLMEngine":
         """Creates an LLM engine from the engine arguments."""
         # Create the engine configs.
@@ -526,7 +521,7 @@ class LLMEngine:
         if model_executor := getattr(self, "model_executor", None):
             model_executor.shutdown()
 
-    def get_tokenizer_group(self) -> TokenizerGroup:
+    def get_tokenizer_group(self) -> "TokenizerGroup":
         if self.tokenizer is None:
             raise ValueError("Unable to get tokenizer because "
                              "skip_tokenizer_init is True")
@@ -536,10 +531,13 @@ class LLMEngine:
     def get_tokenizer(
         self,
         lora_request: Optional[LoRARequest] = None,
-    ) -> AnyTokenizer:
+    ) -> "AnyTokenizer":
         return self.get_tokenizer_group().get_lora_tokenizer(lora_request)
 
-    def _init_tokenizer(self) -> TokenizerGroup:
+    def _init_tokenizer(self) -> "TokenizerGroup":
+        from vllm.transformers_utils.tokenizer_group import (
+            init_tokenizer_from_configs)
+
         return init_tokenizer_from_configs(
             model_config=self.model_config,
             scheduler_config=self.scheduler_config,
@@ -559,7 +557,7 @@ class LLMEngine:
     def _add_processed_request(
         self,
         request_id: str,
-        processed_inputs: ProcessorInputs,
+        processed_inputs: "ProcessorInputs",
         params: Union[SamplingParams, PoolingParams],
         arrival_time: float,
         lora_request: Optional[LoRARequest],
@@ -570,6 +568,8 @@ class LLMEngine:
         """Add a processed request to the engine's request pool.
         return the created sequence group.
         """
+        from vllm.inputs.parse import split_enc_dec_inputs
+
         if isinstance(params, SamplingParams) and params.n > 1:
             ParallelSampleSequenceGroup.add_request(
                 request_id,
@@ -642,7 +642,7 @@ class LLMEngine:
     def add_request(
         self,
         request_id: str,
-        prompt: PromptType,
+        prompt: "PromptType",
         params: Union[SamplingParams, PoolingParams],
         arrival_time: Optional[float] = None,
         lora_request: Optional[LoRARequest] = None,
@@ -659,7 +659,7 @@ class LLMEngine:
         self,
         request_id: str,
         *,
-        inputs: PromptType,
+        inputs: "PromptType",
         params: Union[SamplingParams, PoolingParams],
         arrival_time: Optional[float] = None,
         lora_request: Optional[LoRARequest] = None,
@@ -676,7 +676,7 @@ class LLMEngine:
     def add_request(
             self,
             request_id: str,
-            prompt: Optional[PromptType] = None,
+            prompt: Optional["PromptType"] = None,
             params: Optional[Union[SamplingParams, PoolingParams]] = None,
             arrival_time: Optional[float] = None,
             lora_request: Optional[LoRARequest] = None,
@@ -685,7 +685,7 @@ class LLMEngine:
             prompt_adapter_request: Optional[PromptAdapterRequest] = None,
             priority: int = 0,
             *,
-            inputs: Optional[PromptType] = None,  # DEPRECATED
+            inputs: Optional["PromptType"] = None,  # DEPRECATED
     ) -> None:
         """Add a request to the engine's request pool.
 
@@ -988,6 +988,9 @@ class LLMEngine:
         ctx: The virtual engine context to work on
         request_id: If provided, then only this request is going to be processed
         """
+        from vllm.engine.output_processor.util import (
+            create_output_by_sequence_group)
+        from vllm.model_executor.layers.sampler import SamplerOutput
 
         now = time.time()
 
@@ -1215,9 +1218,9 @@ class LLMEngine:
         return None
 
     def _advance_to_next_step(
-            self, output: SamplerOutput,
-            seq_group_metadata_list: List[SequenceGroupMetadata],
-            scheduled_seq_groups: List[ScheduledSequenceGroup]) -> None:
+            self, output: "SamplerOutput",
+            seq_group_metadata_list: List["SequenceGroupMetadata"],
+            scheduled_seq_groups: List["ScheduledSequenceGroup"]) -> None:
         """Given model output from a single run, append the tokens to the
         sequences. This is normally done inside output processor, but it is
         required if the worker is to perform async forward pass to next step.
@@ -1297,7 +1300,7 @@ class LLMEngine:
         engine = LLMEngine.from_engine_args(engine_args)
         example_inputs = [(0, "What is LLM?",
         SamplingParams(temperature=0.0))]
-    
+
         # Start the engine with an event loop
         while True:
             if example_inputs:
@@ -1495,7 +1498,7 @@ class LLMEngine:
     def _abort_and_cache_schedule(
             self, request_id: str, virtual_engine: int,
             seq_group_metadata_list: List[SequenceGroupMetadata],
-            scheduler_outputs: SchedulerOutputs,
+            scheduler_outputs: "SchedulerOutputs",
             allow_async_output_proc: bool) -> None:
         """Aborts a single request, and caches the scheduler outputs minus that
         request. This allows the next step to continue processing the remaining
@@ -1547,7 +1550,7 @@ class LLMEngine:
     def _cache_scheduler_outputs_for_multi_step(
             self, virtual_engine: int,
             seq_group_metadata_list: Optional[List[SequenceGroupMetadata]],
-            scheduler_outputs: SchedulerOutputs,
+            scheduler_outputs: "SchedulerOutputs",
             allow_async_output_proc: bool) -> None:
         co = self.cached_scheduler_outputs[virtual_engine]
 
@@ -1558,7 +1561,7 @@ class LLMEngine:
 
     def _update_cached_scheduler_output(
             self, virtual_engine: int,
-            output: List[Optional[SamplerOutput]]) -> None:
+            output: List[Optional["SamplerOutput"]]) -> None:
         if (self.parallel_config.pipeline_parallel_size > 1 and len(output) > 0
                 and output[0] is not None):
             last_output = output[-1]
@@ -1580,7 +1583,7 @@ class LLMEngine:
             return cached_last_output.sampled_token_ids_cpu
         return None
 
-    def add_logger(self, logger_name: str, logger: StatLoggerBase) -> None:
+    def add_logger(self, logger_name: str, logger: "StatLoggerBase") -> None:
         if not self.log_stats:
             raise RuntimeError(
                 "Stat logging is disabled. Set `disable_log_stats=False` "
@@ -1599,8 +1602,8 @@ class LLMEngine:
         del self.stat_loggers[logger_name]
 
     def do_log_stats(self,
-                     scheduler_outputs: Optional[SchedulerOutputs] = None,
-                     model_output: Optional[List[SamplerOutput]] = None,
+                     scheduler_outputs: Optional["SchedulerOutputs"] = None,
+                     model_output: Optional[List["SamplerOutput"]] = None,
                      finished_before: Optional[List[int]] = None,
                      skip: Optional[List[int]] = None) -> None:
         """Forced log when no requests active."""
@@ -1611,10 +1614,10 @@ class LLMEngine:
                 logger.log(stats)
 
     def _get_stats(self,
-                   scheduler_outputs: Optional[SchedulerOutputs],
-                   model_output: Optional[List[SamplerOutput]] = None,
+                   scheduler_outputs: Optional["SchedulerOutputs"],
+                   model_output: Optional[List["SamplerOutput"]] = None,
                    finished_before: Optional[List[int]] = None,
-                   skip: Optional[List[int]] = None) -> Stats:
+                   skip: Optional[List[int]] = None) -> "Stats":
         """Get Stats to be Logged to Prometheus.
 
         Args:
@@ -1627,6 +1630,9 @@ class LLMEngine:
             skip: Optional, indices of sequences that were preempted. These
                 sequences will be ignored.
         """
+        from vllm.engine.metrics_types import Stats
+        from vllm.model_executor.layers.sampler import SamplerOutput
+
         now = time.time()
 
         # System State
@@ -1928,7 +1934,7 @@ class LLMEngine:
         return self.tracer is not None
 
     def do_tracing(self,
-                   scheduler_outputs: SchedulerOutputs,
+                   scheduler_outputs: "SchedulerOutputs",
                    finished_before: Optional[List[int]] = None) -> None:
         if self.tracer is None:
             return
@@ -1998,8 +2004,10 @@ class LLMEngine:
                     SpanAttributes.GEN_AI_LATENCY_TIME_IN_MODEL_EXECUTE,
                     metrics.model_execute_time)
 
-    def _validate_model_inputs(self, inputs: ProcessorInputs,
+    def _validate_model_inputs(self, inputs: "ProcessorInputs",
                                lora_request: Optional[LoRARequest]):
+        from vllm.inputs.parse import split_enc_dec_inputs
+
         encoder_inputs, decoder_inputs = split_enc_dec_inputs(inputs)
 
         if encoder_inputs is not None:
@@ -2013,7 +2021,7 @@ class LLMEngine:
 
     def _validate_model_input(
         self,
-        prompt_inputs: SingletonInputs,
+        prompt_inputs: "SingletonInputs",
         lora_request: Optional[LoRARequest],
         *,
         prompt_type: Literal["encoder", "decoder"],
@@ -2077,6 +2085,8 @@ class LLMEngine:
         logits_bias, and allowed_token_ids fields in sampling_params. Deletes
         those fields and adds the constructed logits processors to the
         logits_processors field. Returns the modified sampling params."""
+        from vllm.model_executor.guided_decoding import (
+            get_local_guided_decoding_logits_processor)
 
         logits_processors = []
 
@@ -2111,6 +2121,10 @@ class LLMEngine:
             sampling_params.guided_decoding = None
 
         if (sampling_params.logit_bias or sampling_params.allowed_token_ids):
+            from vllm.entrypoints.openai.logits_processors import (
+                get_logits_processors as get_openai_logits_processors)
+            from vllm.logits_process import get_bad_words_logits_processors
+
             tokenizer = self.get_tokenizer(lora_request=lora_request)
 
             processors = get_openai_logits_processors(

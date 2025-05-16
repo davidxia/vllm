@@ -9,19 +9,17 @@ from typing import TYPE_CHECKING, NamedTuple, Optional, Union
 import numpy as np
 import torch
 
-from vllm.inputs import ProcessorInputs, PromptType
 from vllm.logger import init_logger
 
 if TYPE_CHECKING:
     from vllm.config import ModelConfig, VllmConfig
-    from vllm.lora.request import LoRARequest
+    from vllm.inputs import ProcessorInputs, PromptType
     from vllm.pooling_params import PoolingParams
     from vllm.sampling_params import SamplingParams
     from vllm.utils import FlexibleArgumentParser
 else:
     ModelConfig = None
     VllmConfig = None
-    LoRARequest = None
     PoolingParams = None
     SamplingParams = None
     FlexibleArgumentParser = None
@@ -456,9 +454,9 @@ class Platform:
     @classmethod
     def validate_request(
         cls,
-        prompt: PromptType,
+        prompt: "PromptType",
         params: Union[SamplingParams, PoolingParams],
-        processed_inputs: ProcessorInputs,
+        processed_inputs: "ProcessorInputs",
     ) -> None:
         """Raises if this request is unsupported on this platform"""
 

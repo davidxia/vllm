@@ -5,8 +5,9 @@ import copy
 import time
 import weakref
 from functools import partial
-from typing import (Any, AsyncGenerator, Callable, Coroutine, Dict, Iterable,
-                    List, Mapping, Optional, Set, Tuple, Type, Union, overload)
+from typing import (TYPE_CHECKING, Any, AsyncGenerator, Callable, Coroutine,
+                    Dict, Iterable, List, Mapping, Optional, Set, Tuple, Type,
+                    Union, overload)
 from weakref import ReferenceType
 
 from typing_extensions import deprecated
@@ -14,15 +15,12 @@ from typing_extensions import deprecated
 import vllm.envs as envs
 from vllm.config import (DecodingConfig, LoRAConfig, ModelConfig,
                          ParallelConfig, SchedulerConfig, VllmConfig)
-from vllm.core.scheduler import SchedulerOutputs
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.engine.async_timeout import asyncio_timeout
 from vllm.engine.llm_engine import LLMEngine, SchedulerOutputState
 from vllm.engine.metrics_types import StatLoggerBase
 from vllm.engine.protocol import EngineClient
 from vllm.executor.executor_base import ExecutorBase
-from vllm.inputs import PromptType
-from vllm.inputs.preprocess import InputPreprocessor
 from vllm.logger import init_logger
 from vllm.lora.request import LoRARequest
 from vllm.model_executor.guided_decoding import (
@@ -36,6 +34,11 @@ from vllm.sequence import ExecuteModelRequest
 from vllm.transformers_utils.tokenizer import AnyTokenizer
 from vllm.usage.usage_lib import UsageContext
 from vllm.utils import Device, deprecate_kwargs, weak_bind
+
+if TYPE_CHECKING:
+    from vllm.core.scheduler import SchedulerOutputs
+    from vllm.inputs import PromptType
+    from vllm.inputs.preprocess import InputPreprocessor
 
 logger = init_logger(__name__)
 ENGINE_ITERATION_TIMEOUT_S = envs.VLLM_ENGINE_ITERATION_TIMEOUT_S
@@ -434,7 +437,7 @@ class _AsyncLLMEngine(LLMEngine):
         self,
         request_id: str,
         *,
-        inputs: PromptType,
+        inputs: "PromptType",
         params: Union[SamplingParams, PoolingParams],
         arrival_time: Optional[float] = None,
         lora_request: Optional[LoRARequest] = None,
@@ -448,7 +451,7 @@ class _AsyncLLMEngine(LLMEngine):
     async def add_request_async(
         self,
         request_id: str,
-        prompt: PromptType,
+        prompt: "PromptType",
         params: Union[SamplingParams, PoolingParams],
         arrival_time: Optional[float] = None,
         lora_request: Optional[LoRARequest] = None,
@@ -465,7 +468,7 @@ class _AsyncLLMEngine(LLMEngine):
     async def add_request_async(
             self,
             request_id: str,
-            prompt: Optional[PromptType] = None,
+            prompt: Optional["PromptType"] = None,
             params: Optional[Union[SamplingParams, PoolingParams]] = None,
             arrival_time: Optional[float] = None,
             lora_request: Optional[LoRARequest] = None,
@@ -473,7 +476,7 @@ class _AsyncLLMEngine(LLMEngine):
             prompt_adapter_request: Optional[PromptAdapterRequest] = None,
             priority: int = 0,
             *,
-            inputs: Optional[PromptType] = None,  # DEPRECATED
+            inputs: Optional["PromptType"] = None,  # DEPRECATED
     ) -> None:
         """Async version of {meth}`add_request`."""
         if inputs is not None:
@@ -725,7 +728,7 @@ class AsyncLLMEngine(EngineClient):
         self.set_errored(exc)
         self._request_tracker.propagate_exception(exc)
 
-    async def get_input_preprocessor(self) -> InputPreprocessor:
+    async def get_input_preprocessor(self) -> "InputPreprocessor":
         return self.engine.input_preprocessor
 
     async def get_tokenizer(
@@ -892,7 +895,7 @@ class AsyncLLMEngine(EngineClient):
         self,
         request_id: str,
         *,
-        inputs: PromptType,
+        inputs: "PromptType",
         params: Union[SamplingParams, PoolingParams],
         arrival_time: Optional[float] = None,
         lora_request: Optional[LoRARequest] = None,
@@ -907,7 +910,7 @@ class AsyncLLMEngine(EngineClient):
     def add_request(
         self,
         request_id: str,
-        prompt: PromptType,
+        prompt: "PromptType",
         params: Union[SamplingParams, PoolingParams],
         arrival_time: Optional[float] = None,
         lora_request: Optional[LoRARequest] = None,
@@ -925,7 +928,7 @@ class AsyncLLMEngine(EngineClient):
     async def add_request(
         self,
         request_id: str,
-        prompt: Optional[PromptType] = None,
+        prompt: Optional["PromptType"] = None,
         params: Optional[Union[SamplingParams, PoolingParams]] = None,
         arrival_time: Optional[float] = None,
         lora_request: Optional[LoRARequest] = None,
@@ -933,7 +936,7 @@ class AsyncLLMEngine(EngineClient):
         prompt_adapter_request: Optional[PromptAdapterRequest] = None,
         priority: int = 0,
         *,
-        inputs: Optional[PromptType] = None,  # DEPRECATED
+        inputs: Optional["PromptType"] = None,  # DEPRECATED
     ) -> AsyncGenerator[Union[RequestOutput, PoolingRequestOutput], None]:
         if inputs is not None:
             prompt = inputs
@@ -970,7 +973,7 @@ class AsyncLLMEngine(EngineClient):
 
     async def generate(
         self,
-        prompt: PromptType,
+        prompt: "PromptType",
         sampling_params: SamplingParams,
         request_id: str,
         lora_request: Optional[LoRARequest] = None,
@@ -1061,7 +1064,7 @@ class AsyncLLMEngine(EngineClient):
 
     async def encode(
         self,
-        prompt: PromptType,
+        prompt: "PromptType",
         pooling_params: PoolingParams,
         request_id: str,
         lora_request: Optional[LoRARequest] = None,
@@ -1103,7 +1106,7 @@ class AsyncLLMEngine(EngineClient):
         ```
         # Please refer to entrypoints/api_server.py for
         # the complete example.
-    
+
         # initialize the engine and the example input
         # note that engine_args here is AsyncEngineArgs instance
         engine = AsyncLLMEngine.from_engine_args(engine_args)
@@ -1111,13 +1114,13 @@ class AsyncLLMEngine(EngineClient):
             "input": "What is LLM?",
             "request_id": 0,
         }
-    
+
         # start the generation
         results_generator = engine.encode(
         example_input["input"],
         PoolingParams(),
         example_input["request_id"])
-    
+
         # get the results
         final_output = None
         async for request_output in results_generator:
@@ -1127,7 +1130,7 @@ class AsyncLLMEngine(EngineClient):
                 # Return or raise an error
                 ...
             final_output = request_output
-    
+
         # Process and return the final output
         ...
         ```
@@ -1203,7 +1206,7 @@ class AsyncLLMEngine(EngineClient):
 
     async def do_log_stats(
             self,
-            scheduler_outputs: Optional[SchedulerOutputs] = None,
+            scheduler_outputs: Optional["SchedulerOutputs"] = None,
             model_output: Optional[List[SamplerOutput]] = None) -> None:
         self.engine.do_log_stats()
 

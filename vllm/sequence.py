@@ -9,17 +9,19 @@ from collections.abc import Mapping
 from collections.abc import Sequence as GenericSequence
 from dataclasses import dataclass, field
 from functools import reduce
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
 
 import msgspec
 import torch
 
-from vllm.inputs import SingletonInputs
 from vllm.lora.request import LoRARequest
 from vllm.multimodal import MultiModalKwargs, MultiModalPlaceholderDict
 from vllm.pooling_params import PoolingParams
 from vllm.prompt_adapter.request import PromptAdapterRequest
 from vllm.sampling_params import RequestOutputKind, SamplingParams
+
+if TYPE_CHECKING:
+    from vllm.inputs import SingletonInputs
 
 VLLM_TOKEN_ID_ARRAY_TYPE = "l"
 
@@ -112,12 +114,12 @@ class RequestMetrics:
                             will include model forward, block/sync across
                             workers, cpu-gpu sync time and sampling time.
         spec_token_acceptance_counts: number of accepted speculative tokens at
-                                      each position; the first token is from 
+                                      each position; the first token is from
                                       the target model and is always accepted;
-                                      e.g., when it's [10, 8, 4, 2] for a req, 
+                                      e.g., when it's [10, 8, 4, 2] for a req,
                                       it means there were 10 forward passes in
-                                      total, and there were 8, 4, 2 accepted 
-                                      tokens at 1st, 2nd, 3rd speculation step. 
+                                      total, and there were 8, 4, 2 accepted
+                                      tokens at 1st, 2nd, 3rd speculation step.
     """
     arrival_time: float
     last_token_time: float
@@ -469,7 +471,7 @@ class Sequence:
     def __init__(
         self,
         seq_id: int,
-        inputs: SingletonInputs,
+        inputs: "SingletonInputs",
         block_size: int,
         eos_token_id: Optional[int] = None,
         lora_request: Optional[LoRARequest] = None,
@@ -714,9 +716,9 @@ class SequenceGroup:
         trace_headers: OpenTelemetry trace headers.
         prompt_adapter_request: Prompt Adapter request.
         priority: User-defined priority of the request.
-        draft_size: The number of speculative tokens plus one from the target 
+        draft_size: The number of speculative tokens plus one from the target
                     model; equal to max number of tokens a step can generate
-                    for single-draft speculative decoding but larger than 
+                    for single-draft speculative decoding but larger than
                     that for multi-draft SD (currently not supported).
     """
 
