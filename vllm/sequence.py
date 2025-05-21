@@ -1125,7 +1125,7 @@ class SequenceOutput(
             self.output_embed.shape if self.output_embed is not None else None
         return (f"SequenceOutput(parent_seq_id={self.parent_seq_id}, "
                 f"output_token={self.output_token}, "
-                f"output_embed.shape={output_embed_shape}"
+                f"output_embed.shape={output_embed_shape}, "
                 f"logprobs={self.logprobs})")
 
     def __eq__(self, other: object) -> bool:
@@ -1332,6 +1332,8 @@ class HiddenStates(msgspec.Struct, array_like=True,
         # may be "paused" then "resumed" later. This should only prune sequences
         # which are confirmed to be aborted.
         seq_ids = get_all_seq_ids(seq_group_metadata_list)
+        # Only keep sequence IDs that exist in self._seq_ids
+        seq_ids = [seq_id for seq_id in seq_ids if seq_id in self._seq_ids]
         if seq_ids != self._seq_ids:
             # Batch contents changed - prune removed sequences.
             index = [self._seq_ids.index(seq_id) for seq_id in seq_ids]
