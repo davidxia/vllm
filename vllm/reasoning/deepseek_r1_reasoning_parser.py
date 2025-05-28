@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING, Optional, Union
 
 from transformers import PreTrainedTokenizerBase
 
+from vllm.entrypoints.openai.protocol import DeltaMessage
 from vllm.logger import init_logger
 from vllm.reasoning import ReasoningParser, ReasoningParserManager
 
 if TYPE_CHECKING:
-    from vllm.entrypoints.openai.protocol import (ChatCompletionRequest,
-                                                  DeltaMessage)
+    from vllm.entrypoints.openai.protocol import ChatCompletionRequest
 
 logger = init_logger(__name__)
 
@@ -74,7 +74,6 @@ class DeepSeekR1ReasoningParser(ReasoningParser):
         - 'abc' goes to reasoning_content
         - 'xyz' goes to content
         """
-        from vllm.entrypoints.openai.protocol import DeltaMessage
 
         # Skip single special tokens
         if len(delta_token_ids) == 1 and (delta_token_ids[0] in [

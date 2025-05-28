@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING, Optional, Union
 import regex as re
 from transformers import PreTrainedTokenizerBase
 
+from vllm.entrypoints.openai.protocol import DeltaMessage
 from vllm.logger import init_logger
 from vllm.reasoning import ReasoningParser, ReasoningParserManager
 
 if TYPE_CHECKING:
-    from vllm.entrypoints.openai.protocol import (ChatCompletionRequest,
-                                                  DeltaMessage)
+    from vllm.entrypoints.openai.protocol import ChatCompletionRequest
 
 logger = init_logger(__name__)
 
@@ -176,7 +176,6 @@ class GraniteReasoningParser(ReasoningParser):
         Returns:
             DeltaMessage: Message containing the parsed content.
         """
-        from vllm.entrypoints.openai.protocol import DeltaMessage
 
         prev_longest_length = len(current_text) - len(delta_text)
         is_substr = self._is_reasoning_start_substr(current_text)
@@ -292,7 +291,6 @@ class GraniteReasoningParser(ReasoningParser):
         Returns:
             DeltaMessage: Message containing the parsed content.
         """
-        from vllm.entrypoints.openai.protocol import DeltaMessage
 
         # Always have content; take length to the end
         delta_content = delta_text[-len(response_content):]
